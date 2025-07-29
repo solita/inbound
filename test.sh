@@ -14,11 +14,13 @@ openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 \
     -days 365 -sha256 \
     -subj "/CN=localhost" \
     -addext "subjectAltName=DNS:localhost"
+export INBOUND_TLS_CERT=$(<test/server.crt)
+export INBOUND_TLS_KEY=$(<test/server.key)
 
 go build
 trap 'kill $(jobs -p)' EXIT # Stop background jobs on exit
 # Run inbound server on background
-./inbound -s3-endpoint http://localhost:9090 -s3-bucket inbound-files -max-size 150 -tls-cert test/server.crt -tls-key test/server.key &
+./inbound -s3-endpoint http://localhost:9090 -s3-bucket inbound-files -max-size 150 -tls-from-env &
 
 # Create some test attachments
 head -c 1M </dev/urandom >test/small.bin

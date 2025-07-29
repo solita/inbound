@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"log/slog"
+	"os"
 
 	"github.com/solita/inbound/core"
 	"github.com/solita/inbound/sinks"
@@ -21,6 +22,7 @@ func main() {
 
 	tlsCert := flag.String("tls-cert", "", "Path to TLS certificate file")
 	tlsKey := flag.String("tls-key", "", "Path to TLS private key file")
+	tlsFromEnv := flag.Bool("tls-from-env", false, "Load TLS certificate from INBOUND_TLS_CERT and private key from INBOUND_TLS_KEY environment variables")
 
 	flag.Parse()
 
@@ -51,8 +53,21 @@ func main() {
 	server.MaxMessageBytes = int64(*maxSizeMb) * 1024 * 1024
 
 	if *tlsCert != "" {
-		slog.Info("STARTTLS support enabled")
+		slog.Info("STARTTLS support enabled", "certFile", *tlsCert, "keyFile", *tlsKey)
 		cert, err := tls.LoadX509KeyPair(*tlsCert, *tlsKey)
+		if err != nil {
+			slog.Error("Failed to load TLS certificate and key", "error", err)
+			return
+		}
+		server.TLSConfig = &tls.Config{
+			Certificates: []tls.Certificate{cert},
+			MinVersion:   tls.VersionTLS12,
+		}
+	} else if *tlsFromEnv {
+		slog.Info("STARTTLS support enabled, using environment variables for key material")
+		certPEMBlock := []byte(os.Getenv("INBOUND_TLS_CERT"))
+		keyPEMBlock := []byte(os.Getenv("INBOUND_TLS_KEY"))
+		cert, err := tls.X509KeyPair(certPEMBlock, keyPEMBlock)
 		if err != nil {
 			slog.Error("Failed to load TLS certificate and key", "error", err)
 			return
