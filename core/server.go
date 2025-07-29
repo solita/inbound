@@ -39,6 +39,8 @@ func (s *session) Data(r io.Reader) error {
 		return fmt.Errorf("failed to parse incoming mail: %w", err)
 	}
 
+	// Mail with attachments will be delivered in multipart/mixed format
+	// Go through parts to extract message content and attachments
 	textBody := ""
 	contentType := ""
 	attachments := make([]Attachment, 0)
@@ -53,6 +55,7 @@ func (s *session) Data(r io.Reader) error {
 
 		switch h := p.Header.(type) {
 		case *mail.InlineHeader:
+			// Inline = message content/body
 			text, err := io.ReadAll(p.Body)
 			if err != nil {
 				return fmt.Errorf("failed to read message content: %w", err)
@@ -70,6 +73,7 @@ func (s *session) Data(r io.Reader) error {
 				contentType = "multipart/mixed"
 			}
 		case *mail.AttachmentHeader:
+			// Attachment file
 			filename, err := h.Filename()
 			if err != nil {
 				return fmt.Errorf("failed to parse attachment filename: %w", err)
@@ -90,6 +94,7 @@ func (s *session) Data(r io.Reader) error {
 			})
 		}
 	}
+	// Strip MIME boundary from end of text body
 	textBody = strings.TrimRight(textBody, "\r\n")
 
 	// Store message metadata

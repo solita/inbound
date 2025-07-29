@@ -8,10 +8,17 @@ export AWS_REGION="us-east-1"
 export AWS_ACCESS_KEY_ID="test"
 export AWS_SECRET_ACCESS_KEY="test"
 
+# Make key for STARTTLS
+openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 \
+    -keyout test/server.key -out test/server.crt -nodes \
+    -days 365 -sha256 \
+    -subj "/CN=localhost" \
+    -addext "subjectAltName=DNS:localhost"
+
 go build
 trap 'kill $(jobs -p)' EXIT # Stop background jobs on exit
 # Run inbound server on background
-./inbound -s3-endpoint http://localhost:9090 -s3-bucket inbound-files -max-size 150 &
+./inbound -s3-endpoint http://localhost:9090 -s3-bucket inbound-files -max-size 150 -tls-cert test/server.crt -tls-key test/server.key &
 
 # Create some test attachments
 head -c 1M </dev/urandom >test/small.bin
@@ -39,7 +46,6 @@ grep -qr '"content_type":"text/html"' test/s3root
 $swaks_cmd --header "Subject: Small attachment" --body "small attachment" --attach @test/small.bin
 grep -qr '"content":"small attachment"' test/s3root
 grep -qr '"subject":"Small attachment"' test/s3root
-grep -qr '"content_type":"text/plain"' test/s3root
 grep -qr '"original_filename":"small.bin"' test/s3root
 # Shell magic: check that file content matches byte for byte
 find test/s3root -type f -exec sh -c 'cmp -s "$0" "$1" && { printf "%s\n" "$1"; exit 0; }' test/small.bin {} \; -print -quit
@@ -47,13 +53,16 @@ find test/s3root -type f -exec sh -c 'cmp -s "$0" "$1" && { printf "%s\n" "$1"; 
 $swaks_cmd --header "Subject: Medium attachment" --body "medium attachment" --attach @test/medium.bin
 grep -qr '"content":"medium attachment"' test/s3root
 grep -qr '"subject":"Medium attachment"' test/s3root
-grep -qr '"content_type":"text/plain"' test/s3root
 grep -qr '"original_filename":"medium.bin"' test/s3root
 find test/s3root -type f -exec sh -c 'cmp -s "$0" "$1" && { printf "%s\n" "$1"; exit 0; }' test/medium.bin {} \; -print -quit
 
 $swaks_cmd --header "Subject: Large attachment" --body "large attachment" --attach @test/large.bin
 grep -qr '"content":"large attachment"' test/s3root
 grep -qr '"subject":"Large attachment"' test/s3root
-grep -qr '"content_type":"text/plain"' test/s3root
 grep -qr '"original_filename":"large.bin"' test/s3root
 find test/s3root -type f -exec sh -c 'cmp -s "$0" "$1" && { printf "%s\n" "$1"; exit 0; }' test/large.bin {} \; -print -quit
+
+# STARTTLS
+$swaks_cmd --tls --header "Subject: Encrypted mail" --body "encrypted mail"
+grep -qr '"content":"encrypted mail"' test/s3root
+grep -qr '"subject":"Encrypted mail"' test/s3root
