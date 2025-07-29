@@ -1,17 +1,18 @@
 package core
 
 type Message struct {
-	Id      string
-	From    string
-	To      string
-	Subject string
+	Id      string `json:"id"`
+	From    string `json:"from"`
+	To      string `json:"to"`
+	Subject string `json:"subject"`
 
-	Content string
+	Content     string `json:"content"`
+	ContentType string `json:"content_type"`
 
-	Attachments []Attachment
+	Attachments []Attachment `json:"attachments"`
 }
 
 type Attachment struct {
-	Id               string
-	OriginalFilename string
+	Id               string `json:"id"`
+	OriginalFilename string `json:"original_filename"`
 }

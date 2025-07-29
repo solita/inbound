@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/emersion/go-message/mail"
 	"github.com/emersion/go-smtp"
@@ -39,6 +40,7 @@ func (s *session) Data(r io.Reader) error {
 	}
 
 	textBody := ""
+	contentType := ""
 	attachments := make([]Attachment, 0)
 	for {
 		p, err := mr.NextPart()
@@ -57,6 +59,16 @@ func (s *session) Data(r io.Reader) error {
 			}
 			// Multiple inline parts probably shouldn't happen, but handle it in any case
 			textBody += string(text)
+
+			partType, _, err := h.ContentType()
+			if err != nil {
+				return fmt.Errorf("failed to parse content type: %w", err)
+			}
+			if contentType == "" {
+				contentType = partType
+			} else if contentType != partType {
+				contentType = "multipart/mixed"
+			}
 		case *mail.AttachmentHeader:
 			filename, err := h.Filename()
 			if err != nil {
@@ -78,6 +90,7 @@ func (s *session) Data(r io.Reader) error {
 			})
 		}
 	}
+	textBody = strings.TrimRight(textBody, "\r\n")
 
 	// Store message metadata
 	subject, err := mr.Header.Subject()
@@ -90,6 +103,7 @@ func (s *session) Data(r io.Reader) error {
 		To:          s.to,
 		Subject:     subject,
 		Content:     textBody,
+		ContentType: contentType,
 		Attachments: attachments,
 	}
 	for _, sink := range s.sinks {

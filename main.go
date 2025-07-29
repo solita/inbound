@@ -12,10 +12,11 @@ func main() {
 	localDir := flag.String("local-dir", "", "Local directory to store mail to")
 	s3Bucket := flag.String("s3-bucket", "", "S3 bucket to store mail to")
 	s3Prefix := flag.String("s3-prefix", "", "S3 prefix inside the bucket")
+	s3Endpoint := flag.String("s3-endpoint", "", "S3 base endpoint URL (for non-AWS object storage)")
 
 	listenAddr := flag.String("listen", "localhost:1025", "Address to listen for incoming mail")
 	domain := flag.String("domain", "localhost", "Domain to identify this server in SMTP greetings")
-	maxMessageMb := flag.Int("max-message", 100, "Maximum size of an incoming message in megabytes")
+	maxSizeMb := flag.Int("max-size", 100, "Maximum size of an incoming message in megabytes")
 
 	flag.Parse()
 
@@ -29,7 +30,7 @@ func main() {
 		enabledSinks = append(enabledSinks, localSink)
 	}
 	if *s3Bucket != "" {
-		s3Sink, err := sinks.NewS3(*s3Bucket, *s3Prefix)
+		s3Sink, err := sinks.NewS3(*s3Bucket, *s3Prefix, *s3Endpoint)
 		if err != nil {
 			slog.Error("Failed to create S3 sink", "error", err)
 			return
@@ -40,7 +41,7 @@ func main() {
 	server := core.NewServer(enabledSinks)
 	server.Addr = *listenAddr
 	server.Domain = *domain
-	server.MaxMessageBytes = int64(*maxMessageMb) * 1024 * 1024
+	server.MaxMessageBytes = int64(*maxSizeMb) * 1024 * 1024
 
 	slog.Info("Starting inbound incoming mail server")
 	err := server.ListenAndServe()

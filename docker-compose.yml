@@ -1,0 +1,12 @@
+version: '3'
+
+services:
+  s3mock:
+    image: docker.io/adobe/s3mock:latest
+    environment:
+      - COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS=inbound-files
+      - COM_ADOBE_TESTING_S3MOCK_STORE_ROOT=s3root
+    ports:
+      - 9090:9090
+    volumes:
+      - ./test/s3root:/s3root

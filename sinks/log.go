@@ -10,7 +10,11 @@ import (
 type LoggingSink struct{}
 
 func (s *LoggingSink) StoreMessage(msg core.Message) error {
-	slog.Info("Received message", "data", msg)
+	attachmentIds := make([]string, len(msg.Attachments))
+	for i, att := range msg.Attachments {
+		attachmentIds[i] = att.Id
+	}
+	slog.Info("Received message", "id", msg.Id, "attachments", attachmentIds)
 	return nil
 }
 
