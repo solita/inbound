@@ -1,0 +1,7 @@
+# Takes binary from host; this may be useful if you need images for another arch
+# Crosscompiling and then copying the result is MUCH quicker than go build with qemu-user-static!
+FROM docker.io/alpine:latest
+
+COPY inbound /inbound
+
+ENTRYPOINT ["/inbound"]
