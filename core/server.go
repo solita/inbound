@@ -4,17 +4,23 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/emersion/go-message/mail"
 	"github.com/emersion/go-smtp"
 	"github.com/google/uuid"
+	"github.com/solita/inbound/metrics"
 )
 
 type session struct {
-	sinks []Sink
+	sinks        []Sink
+	errorHandler func(error)
+	metrics      metrics.Collector
 
 	from string
 	to   string
+
+	startTime int64
 }
 
 func (s *session) Reset() {}
@@ -24,6 +30,7 @@ func (s *session) Logout() error {
 }
 
 func (s *session) Mail(from string, opts *smtp.MailOptions) error {
+	s.startTime = time.Now().UnixMilli()
 	s.from = from
 	return nil
 }
@@ -34,9 +41,14 @@ func (s *session) Rcpt(to string, opts *smtp.RcptOptions) error {
 }
 
 func (s *session) Data(r io.Reader) error {
+	handleError := func(err error) error {
+		s.errorHandler(err)
+		return err
+	}
+
 	mr, err := mail.CreateReader(r)
 	if err != nil {
-		return fmt.Errorf("failed to parse incoming mail: %w", err)
+		return handleError(fmt.Errorf("failed to parse incoming mail: %w", err))
 	}
 
 	// Mail with attachments will be delivered in multipart/mixed format
@@ -50,7 +62,7 @@ func (s *session) Data(r io.Reader) error {
 			break
 		}
 		if err != nil {
-			return fmt.Errorf("failed to parse email part: %w", err)
+			return handleError(fmt.Errorf("failed to parse email part: %w", err))
 		}
 
 		switch h := p.Header.(type) {
@@ -58,14 +70,14 @@ func (s *session) Data(r io.Reader) error {
 			// Inline = message content/body
 			text, err := io.ReadAll(p.Body)
 			if err != nil {
-				return fmt.Errorf("failed to read message content: %w", err)
+				return handleError(fmt.Errorf("failed to read message content: %w", err))
 			}
 			// Multiple inline parts probably shouldn't happen, but handle it in any case
 			textBody += string(text)
 
 			partType, _, err := h.ContentType()
 			if err != nil {
-				return fmt.Errorf("failed to parse content type: %w", err)
+				return handleError(fmt.Errorf("failed to parse content type: %w", err))
 			}
 			if contentType == "" {
 				contentType = partType
@@ -76,14 +88,14 @@ func (s *session) Data(r io.Reader) error {
 			// Attachment file
 			filename, err := h.Filename()
 			if err != nil {
-				return fmt.Errorf("failed to parse attachment filename: %w", err)
+				return handleError(fmt.Errorf("failed to parse attachment filename: %w", err))
 			}
 			id := uuid.New().String()
 
 			// Store attachment content (streaming)
 			for _, sink := range s.sinks {
 				if err = sink.StoreAttachment(id, p.Body); err != nil {
-					return fmt.Errorf("failed to store attachment %q: %w", filename, err)
+					return handleError(fmt.Errorf("failed to store attachment %q: %w", filename, err))
 				}
 			}
 
@@ -100,7 +112,7 @@ func (s *session) Data(r io.Reader) error {
 	// Store message metadata
 	subject, err := mr.Header.Subject()
 	if err != nil {
-		return fmt.Errorf("failed to parse email subject: %w", err)
+		return handleError(fmt.Errorf("failed to parse email subject: %w", err))
 	}
 	msg := Message{
 		Id:          uuid.New().String(),
@@ -113,8 +125,13 @@ func (s *session) Data(r io.Reader) error {
 	}
 	for _, sink := range s.sinks {
 		if err = sink.StoreMessage(msg); err != nil {
-			return fmt.Errorf("failed to store message metadata: %w", err)
+			return handleError(fmt.Errorf("failed to store message metadata: %w", err))
 		}
+	}
+
+	duration := time.Now().UnixMilli() - s.startTime
+	if s.metrics != nil {
+		s.metrics.ReceiveSuccess(duration)
 	}
 	return nil
 }
@@ -123,10 +140,12 @@ type ServerConfig struct {
 	Listen string
 }
 
-func NewServer(sinks []Sink) *smtp.Server {
+func NewServer(sinks []Sink, errorHandler func(error), metrics metrics.Collector) *smtp.Server {
 	backend := smtp.BackendFunc(func(c *smtp.Conn) (smtp.Session, error) {
 		return &session{
-			sinks: sinks,
+			sinks:        sinks,
+			errorHandler: errorHandler,
+			metrics:      metrics,
 		}, nil
 	})
 

@@ -41,6 +41,8 @@ To run tests, use `test.sh`. You'll need `swaks` email testing tool installed.
 ## Usage
 ```
 Usage of ./inbound:
+  -cloudwatch-metrics
+        Enable CloudWatch metrics
   -domain string
         Domain to identify this server in SMTP greetings (default "localhost")
   -listen string
@@ -49,6 +51,8 @@ Usage of ./inbound:
         Local directory to store mail to
   -max-size int
         Maximum size of an incoming message in megabytes (default 100)
+  -metric-namespace string
+        CloudWatch metrics namespace (default "InboundMail")
   -s3-bucket string
         S3 bucket to store mail to
   -s3-endpoint string
@@ -60,8 +64,7 @@ Usage of ./inbound:
   -tls-from-env
         Load TLS certificate from INBOUND_TLS_CERT and private key from INBOUND_TLS_KEY environment variables
   -tls-key string
-        Path to TLS private key file
-```
+        Path to TLS private key file```
 
 To run Inbound, point it to S3-like or local storage:
 ```sh

@@ -1,12 +1,16 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"flag"
 	"log/slog"
 	"os"
 
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
 	"github.com/solita/inbound/core"
+	"github.com/solita/inbound/metrics"
 	"github.com/solita/inbound/sinks"
 )
 
@@ -23,6 +27,9 @@ func main() {
 	tlsCert := flag.String("tls-cert", "", "Path to TLS certificate file")
 	tlsKey := flag.String("tls-key", "", "Path to TLS private key file")
 	tlsFromEnv := flag.Bool("tls-from-env", false, "Load TLS certificate from INBOUND_TLS_CERT and private key from INBOUND_TLS_KEY environment variables")
+
+	cloudwatchMetrics := flag.Bool("cloudwatch-metrics", false, "Enable CloudWatch metrics")
+	metricNamespace := flag.String("metric-namespace", "InboundMail", "CloudWatch metrics namespace")
 
 	flag.Parse()
 
@@ -46,8 +53,26 @@ func main() {
 		enabledSinks = append(enabledSinks, s3Sink)
 	}
 
+	var metricCollector metrics.Collector
+	if *cloudwatchMetrics {
+		slog.Info("Enabling CloudWatch metrics")
+		cfg, err := config.LoadDefaultConfig(context.TODO())
+		if err != nil {
+			slog.Error("Failed to load AWS config for CloudWatch", "error", err)
+			return
+		}
+		cwClient := cloudwatch.NewFromConfig(cfg)
+		metricCollector = metrics.NewCloudWatchCollector(cwClient, *metricNamespace, nil)
+	}
+	logError := func(err error) {
+		slog.Error("failed to receive mail", "error", err)
+		if metricCollector != nil {
+			metricCollector.ReceiveError()
+		}
+	}
+
 	slog.Info("Setting up mail server")
-	server := core.NewServer(enabledSinks)
+	server := core.NewServer(enabledSinks, logError, metricCollector)
 	server.Addr = *listenAddr
 	server.Domain = *domain
 	server.MaxMessageBytes = int64(*maxSizeMb) * 1024 * 1024
