@@ -10,6 +10,8 @@ import (
 	"github.com/emersion/go-smtp"
 	"github.com/google/uuid"
 	"github.com/solita/inbound/metrics"
+
+	_ "github.com/emersion/go-message/charset"
 )
 
 type session struct {
