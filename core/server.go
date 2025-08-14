@@ -9,6 +9,7 @@ import (
 	"github.com/emersion/go-message/mail"
 	"github.com/emersion/go-smtp"
 	"github.com/google/uuid"
+	strip "github.com/grokify/html-strip-tags-go"
 	"github.com/solita/inbound/metrics"
 
 	_ "github.com/emersion/go-message/charset"
@@ -79,9 +80,12 @@ func (s *session) Data(r io.Reader) error {
 			if err != nil {
 				return handleError(fmt.Errorf("failed to parse content type: %w", err))
 			}
+			main, quotedThread := splitHtmlToThread(text)
 			alternative := Alternative{
-				Text:        text,
-				ContentType: partType,
+				Text:         text,
+				ContentType:  partType,
+				Last:         main,
+				QuotedThread: quotedThread,
 			}
 			alternatives = append(alternatives, alternative)
 		case *mail.AttachmentHeader:
@@ -160,6 +164,47 @@ func parseReferences(header mail.Header) []string {
 	}
 
 	return refArray
+}
+
+func splitHtmlToThread(body string) (string, string) {
+	// Quoted thread formatting is very much not standardized for HTML mail
+	// ... but it is possible to do this for (some of) most common mail clients
+
+	// Outlook/M365: divRplyFwdMsg
+	outlookQuoteStart := strings.Index(body, "\r\n<div id=\"divRplyFwdMsg\"")
+	if outlookQuoteStart != -1 {
+		beforeVerticalLine := strings.Index(body, "<div id=\"appendonsend\"></div>\r\n")
+		if beforeVerticalLine != -1 {
+			// Try to strip vertical line before the quoted thread too
+			return body[:beforeVerticalLine], body[beforeVerticalLine:]
+		}
+		// Failing that, just strip the quoted thread
+		return body[:outlookQuoteStart], body[outlookQuoteStart:]
+	}
+
+	// Gmail: gmail_quote_container
+	// gmail_quote_container seems to always hold the entire quoted thread
+	// Inside them, further messages are wrapped just with gmail_quote divs
+	gmailQuoteStart := strings.Index(body, "<div class=\"gmail_quote gmail_quote_container\">")
+	if gmailQuoteStart != -1 {
+		return body[:gmailQuoteStart], body[gmailQuoteStart:]
+	}
+
+	// Roundcube webmail: reply-intro
+	roundcubeQuoteStart := strings.Index(body, "\u003cp id=\"reply-intro\"\u003e")
+	if roundcubeQuoteStart != -1 {
+		topMsg := body[:roundcubeQuoteStart]
+		if strings.TrimSpace(strip.StripTags(topMsg)) == "" {
+			// If there is nothing of substance on top, this might be bottom-posting which we can't handle
+			// So just fall back to not splitting anything
+			return body, ""
+		}
+		return body[:roundcubeQuoteStart], body[roundcubeQuoteStart:]
+	}
+
+	// Failed to find quoted thread; maybe it doesn't exist
+	// Or maybe it was just formatted weird, but we can't know
+	return body, ""
 }
 
 type ServerConfig struct {

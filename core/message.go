@@ -13,8 +13,10 @@ type Message struct {
 }
 
 type Alternative struct {
-	ContentType string `json:"content_type"`
-	Text        string `json:"text"`
+	ContentType  string `json:"content_type"`
+	Text         string `json:"text"`
+	Last         string `json:"last"`
+	QuotedThread string `json:"quoted_thread"`
 }
 
 type Attachment struct {

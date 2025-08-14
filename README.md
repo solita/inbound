@@ -141,11 +141,18 @@ A few caveats:
   * `inboundId` is guaranteed to be valid (and very likely unique) UUID string
   * `messageId` is whatever sender put to that header; don't use it for
     uniquely identifying messages unless there is no other option
-* References *usually* refer to `messageId`s of earlier messages in thread
-  * If there is no thread, the array is empty
-  * Note that sender can put, really, anything in `references`!
-    If the content looks nonsensical, best to assume the message does not
-    belong to any thread
+
+### Working with threads
+Inbound detects `References` and `In-Reply-To` headers and includes them in
+message metadata (see below for format). The references are to message ids,
+not Inboud's internal ids. It is application's responsibility to find the
+other messages using e.g. database lookups.
+
+Typically, each message in email thread quotes *all* previous messages of thread.
+There is no standard way to do this, so each email client does their own thing.
+Inbound implements best-effort quoted message stripping that supports some of the
+commonly used styles. This can and will fail, in which case the last reply
+will also contain the entire previous thread.
 
 ### Message schema
 ```jsonc
@@ -161,7 +168,9 @@ A few caveats:
         // Last alternative is considered canonical (and is usually text/html version)
         {
             "content_type": "string", // MIME type sender claims this part to be
-            "text": "string" // Content as text
+            "text": "string", // Message content as text
+            "last": "string", // If message is threaded and quote splitting succeeded: last message in thread. Otherwise, same as text
+            "quoted_thread": "string" // If main did not include entire message, this has the rest
         }
     ],
     "attachments": [

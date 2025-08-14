@@ -16,6 +16,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sso v1.25.6 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.30.4 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.34.1 // indirect
+	github.com/grokify/html-strip-tags-go v0.1.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 )
 
