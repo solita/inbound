@@ -34,37 +34,37 @@ set -x
 
 # Simple mail without attachments
 $swaks_cmd --header "Subject: test mail" --body "no attachments"
-grep -qr '"content":"no attachments"' test/s3root
+grep -qr '"text":"no attachments"' test/s3root
 grep -qr '"subject":"test mail"' test/s3root
 grep -qr '"content_type":"text/plain"' test/s3root
 
 # HTML mail
 $swaks_cmd --header "Subject: HTML mail" --header "Content-Type: text/html" --body "<p>no attachments</p>"
-grep -qr '"content":"\\u003cp\\u003eno attachments\\u003c/p\\u003e"' test/s3root
+grep -qr '"text":"\\u003cp\\u003eno attachments\\u003c/p\\u003e"' test/s3root
 grep -qr '"subject":"HTML mail"' test/s3root
 grep -qr '"content_type":"text/html"' test/s3root
 
 # Attachments
 $swaks_cmd --header "Subject: Small attachment" --body "small attachment" --attach @test/small.bin
-grep -qr '"content":"small attachment"' test/s3root
+grep -qr '"text":"small attachment"' test/s3root
 grep -qr '"subject":"Small attachment"' test/s3root
 grep -qr '"original_filename":"small.bin"' test/s3root
 # Shell magic: check that file content matches byte for byte
 find test/s3root -type f -exec sh -c 'cmp -s "$0" "$1" && { printf "%s\n" "$1"; exit 0; }' test/small.bin {} \; -print -quit
 
 $swaks_cmd --header "Subject: Medium attachment" --body "medium attachment" --attach @test/medium.bin
-grep -qr '"content":"medium attachment"' test/s3root
+grep -qr '"text":"medium attachment"' test/s3root
 grep -qr '"subject":"Medium attachment"' test/s3root
 grep -qr '"original_filename":"medium.bin"' test/s3root
 find test/s3root -type f -exec sh -c 'cmp -s "$0" "$1" && { printf "%s\n" "$1"; exit 0; }' test/medium.bin {} \; -print -quit
 
 $swaks_cmd --header "Subject: Large attachment" --body "large attachment" --attach @test/large.bin
-grep -qr '"content":"large attachment"' test/s3root
+grep -qr '"text":"large attachment"' test/s3root
 grep -qr '"subject":"Large attachment"' test/s3root
 grep -qr '"original_filename":"large.bin"' test/s3root
 find test/s3root -type f -exec sh -c 'cmp -s "$0" "$1" && { printf "%s\n" "$1"; exit 0; }' test/large.bin {} \; -print -quit
 
 # STARTTLS
 $swaks_cmd --tls --header "Subject: Encrypted mail" --body "encrypted mail"
-grep -qr '"content":"encrypted mail"' test/s3root
+grep -qr '"text":"encrypted mail"' test/s3root
 grep -qr '"subject":"Encrypted mail"' test/s3root

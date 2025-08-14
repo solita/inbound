@@ -53,10 +53,7 @@ func (s *session) Data(r io.Reader) error {
 		return handleError(fmt.Errorf("failed to parse incoming mail: %w", err))
 	}
 
-	// Mail with attachments will be delivered in multipart/mixed format
-	// Go through parts to extract message content and attachments
-	textBody := ""
-	contentType := ""
+	alternatives := make([]Alternative, 0)
 	attachments := make([]Attachment, 0)
 	for {
 		p, err := mr.NextPart()
@@ -69,23 +66,24 @@ func (s *session) Data(r io.Reader) error {
 
 		switch h := p.Header.(type) {
 		case *mail.InlineHeader:
-			// Inline = message content/body
-			text, err := io.ReadAll(p.Body)
+			// Inline = one variation of message content/body
+			content, err := io.ReadAll(p.Body)
 			if err != nil {
 				return handleError(fmt.Errorf("failed to read message content: %w", err))
 			}
-			// Multiple inline parts probably shouldn't happen, but handle it in any case
-			textBody += string(text)
+			text := string(content)
+			// Remove trailing newlines that some email clients sometimes add
+			text = strings.TrimRight(text, "\r\n")
 
 			partType, _, err := h.ContentType()
 			if err != nil {
 				return handleError(fmt.Errorf("failed to parse content type: %w", err))
 			}
-			if contentType == "" {
-				contentType = partType
-			} else if contentType != partType {
-				contentType = "multipart/mixed"
+			alternative := Alternative{
+				Text:        text,
+				ContentType: partType,
 			}
+			alternatives = append(alternatives, alternative)
 		case *mail.AttachmentHeader:
 			// Attachment file
 			filename, err := h.Filename()
@@ -108,22 +106,26 @@ func (s *session) Data(r io.Reader) error {
 			})
 		}
 	}
-	// Strip MIME boundary from end of text body
-	textBody = strings.TrimRight(textBody, "\r\n")
 
 	// Store message metadata
 	subject, err := mr.Header.Subject()
 	if err != nil {
 		return handleError(fmt.Errorf("failed to parse email subject: %w", err))
 	}
+	messageId, err := mr.Header.MessageID()
+	if err != nil {
+		return handleError(fmt.Errorf("failed to parse message ID: %w", err))
+	}
+
 	msg := Message{
-		Id:          uuid.New().String(),
-		From:        s.from,
-		To:          s.to,
-		Subject:     subject,
-		Content:     textBody,
-		ContentType: contentType,
-		Attachments: attachments,
+		Id:           uuid.New().String(),
+		MessageId:    messageId,
+		From:         s.from,
+		To:           s.to,
+		Subject:      subject,
+		Alternatives: alternatives,
+		Attachments:  attachments,
+		References:   parseReferences(mr.Header),
 	}
 	for _, sink := range s.sinks {
 		if err = sink.StoreMessage(msg); err != nil {
@@ -136,6 +138,28 @@ func (s *session) Data(r io.Reader) error {
 		s.metrics.ReceiveSuccess(duration)
 	}
 	return nil
+}
+
+func parseReferences(header mail.Header) []string {
+	// Most mail clients should include both References and In-Reply-To
+	references := header.Get("References")
+	inReplyTo := header.Get("In-Reply-To")
+	refArray := strings.Fields(references)
+
+	// But in case the references don't include last (or anything at all)
+	// just add it there
+	if len(refArray) == 0 || refArray[len(refArray)-1] != inReplyTo {
+		refArray = append(refArray, inReplyTo)
+	}
+
+	// Remove < and > from the references so they are only Message-IDs
+	for i, ref := range refArray {
+		ref = strings.TrimPrefix(ref, "<")
+		ref = strings.TrimSuffix(ref, ">")
+		refArray[i] = ref
+	}
+
+	return refArray
 }
 
 type ServerConfig struct {
