@@ -163,6 +163,10 @@ will also contain the entire previous thread.
     "to": "string", // To field - Inbound doesn't do anything with this, or validate it
     "subject": "string", // Subject line
     "references": [], // References to earlier message ids in same thread
+    // Raw, unprocessed headers in case they happen to be necessary
+    "raw_headers": {
+        "Header-Name": ["list", "of", "values"]
+    }
     "alternatives": [
         // Alternative versions of message body - only one of them should be shown!
         // Last alternative is considered canonical (and is usually text/html version)
