@@ -120,16 +120,35 @@ func (s *session) Data(r io.Reader) error {
 	if err != nil {
 		return handleError(fmt.Errorf("failed to parse message ID: %w", err))
 	}
+	rawHeaders := make(map[string][]string)
+	fields := mr.Header.Fields()
+	for {
+		if !fields.Next() {
+			break
+		}
+		key := fields.Key()
+		value := fields.Value()
+		rawHeaders[key] = append(rawHeaders[key], value)
+	}
+
+	// Prefer mail's From header over SMTP From header
+	// The latter would typically be the last server who touched this, which is not useful when relaying mail
+	from := mr.Header.Get("From")
+	if from == "" {
+		// Fallback to SMTP From
+		from = s.from
+	}
 
 	msg := Message{
 		Id:           uuid.New().String(),
 		MessageId:    messageId,
-		From:         s.from,
+		From:         from,
 		To:           s.to,
 		Subject:      subject,
 		Alternatives: alternatives,
 		Attachments:  attachments,
 		References:   parseReferences(mr.Header),
+		RawHeaders:   rawHeaders,
 	}
 	for _, sink := range s.sinks {
 		if err = sink.StoreMessage(msg); err != nil {

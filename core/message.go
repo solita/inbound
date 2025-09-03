@@ -1,12 +1,13 @@
 package core
 
 type Message struct {
-	Id         string   `json:"inbound_id"`
-	MessageId  string   `json:"message_id"`
-	From       string   `json:"from"`
-	To         string   `json:"to"`
-	Subject    string   `json:"subject"`
-	References []string `json:"references"`
+	Id         string              `json:"inbound_id"`
+	MessageId  string              `json:"message_id"`
+	From       string              `json:"from"`
+	To         string              `json:"to"`
+	Subject    string              `json:"subject"`
+	References []string            `json:"references"`
+	RawHeaders map[string][]string `json:"raw_headers"`
 
 	Alternatives []Alternative `json:"alternatives"`
 	Attachments  []Attachment  `json:"attachments"`
