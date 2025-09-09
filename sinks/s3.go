@@ -21,7 +21,7 @@ type S3Sink struct {
 }
 
 func (s *S3Sink) StoreMessage(msg core.Message) error {
-	key := s.prefix + "/messages/" + msg.Id + ".json"
+	key := s.prefix + "messages/" + msg.Id + ".json"
 	value, err := json.Marshal(msg)
 	if err != nil {
 		return fmt.Errorf("failed to serialize message metadata: %w", err)
@@ -39,7 +39,7 @@ func (s *S3Sink) StoreMessage(msg core.Message) error {
 }
 
 func (s *S3Sink) StoreAttachment(id string, data io.Reader) error {
-	key := s.prefix + "/attachments/" + id
+	key := s.prefix + "attachments/" + id
 	// We don't want to trust sender to provide valid attachment size, so read it fully
 	// and then upload to S3
 	var buf bytes.Buffer
